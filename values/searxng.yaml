@@ -13,6 +13,14 @@ serviceAccount:
   enabled: true
   automount: false
 
+startupProbe:
+  httpGet:
+    path: /
+    port: http
+  periodSeconds: 5
+  timeoutSeconds: 5
+  failureThreshold: 30
+
 env:
   - name: SEARXNG_SECRET
     valueFrom:

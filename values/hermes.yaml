@@ -22,11 +22,13 @@ config:
   agent:
     gateway_timeout: 1800
 
-env: {}
+env:
+  CRAWL4AI_URL: "http://crawl4ai:11235"
+  SEARXNG_URL: "http://searxng-http:8080"
 
 extraEnvFrom:
   - secretRef:
-      name: hermes-api
+      name: hermes-git
 
   - secretRef:
       name: searxng-secret

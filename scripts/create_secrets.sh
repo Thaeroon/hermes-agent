@@ -3,16 +3,98 @@ set -euo pipefail
 
 NAMESPACE=hermes
 
-kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
+secret_exists() {
+  local name="$1"
 
-kubectl -n "$NAMESPACE" create secret generic hermes-api \
-  --from-literal=OPENAI_API_KEY="$OPENAI_API_KEY" \
-  --dry-run=client -o yaml | kubectl apply -f -
+  kubectl -n "$NAMESPACE" get secret "$name" >/dev/null 2>&1
+}
 
-kubectl -n "$NAMESPACE" create secret generic searxng-secret \
-  --from-literal=SEARXNG_SECRET='.$(openssl rand -hex 32)' \
-  --dry-run=client -o yaml | kubectl apply -f -
+ensure_secret_from_env() {
+  local name="$1"
+  local key="$2"
 
-kubectl -n "$NAMESPACE" create secret generic crawl4ai-secret \
-  --from-literal=CRAWL4AI_API_TOKEN='$(openssl rand -hex 32)' \
-  --dry-run=client -o yaml | kubectl apply -f -
+  if secret_exists "$name"; then
+    echo "✓ Secret '$name' already exists"
+    return 0
+  fi
+
+  local value="${!key:?$key must be set}"
+
+  echo "Creating secret '$name'..."
+
+  kubectl -n "$NAMESPACE" create secret generic "$name" \
+    --from-literal="$key=$value"
+
+  echo "✓ Secret '$name' created"
+}
+
+ensure_generated_secret() {
+  local name="$1"
+  local key="$2"
+
+  if secret_exists "$name"; then
+    echo "✓ Secret '$name' already exists"
+    return 0
+  fi
+
+  local value
+  value="$(openssl rand -hex 32)"
+
+  echo "Creating secret '$name'..."
+
+  kubectl -n "$NAMESPACE" create secret generic "$name" \
+    --from-literal="$key=$value"
+
+  echo "✓ Secret '$name' created"
+}
+
+ensure_hermes_env_secret() {
+  local name="hermes-env"
+
+  if ! secret_exists "$name"; then
+    echo "Creating empty secret '$name'..."
+
+    kubectl -n "$NAMESPACE" create secret generic "$name"
+
+    echo "✓ Secret '$name' created"
+  fi
+
+  while IFS='=' read -r key value; do
+    [[ "$key" == HERMES_* ]] || continue
+
+    local secret_key="${key#HERMES_}"
+    local encoded_value
+
+    encoded_value="$(printf '%s' "$value" | base64 | tr -d '\n')"
+
+    kubectl -n "$NAMESPACE" patch secret "$name" \
+      --type='merge' \
+      -p="{\"data\":{\"$secret_key\":\"$encoded_value\"}}"
+
+    echo "  ✓ $key → $secret_key"
+  done < <(env)
+
+  echo "✓ Secret '$name' populated"
+}
+
+
+
+kubectl create namespace "$NAMESPACE" \
+  --dry-run=client \
+  -o yaml |
+  kubectl apply -f -
+
+ensure_secret_from_env \
+  hermes-git \
+  GIT_TOKEN
+
+ensure_generated_secret \
+  searxng-secret \
+  SEARXNG_SECRET
+
+ensure_generated_secret \
+  crawl4ai-secret \
+  CRAWL4AI_API_TOKEN
+
+ensure_hermes_env_secret \
+  hermes-env

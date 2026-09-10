@@ -1,3 +1,13 @@
+hooks:
+  - events: ["prepare"]
+    showlogs: true
+    command: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        ./scripts/create_secrets.sh
+
 repositories:
   - name: hermes-agent
     url: https://jyje.github.io/hermes-agent-helm
@@ -13,6 +23,49 @@ releases:
     version: 1.13.0
     values:
       - values/hermes.yaml
+    hooks:
+      - events: ["postsync"]
+        showlogs: true
+        command: bash
+        args:
+          - -c
+          - |
+            set -euo pipefail
+
+            echo "Waiting for Hermes pod..."
+
+            kubectl -n hermes wait \
+              --for=condition=Ready \
+              pod \
+              -l app.kubernetes.io/name=hermes-agent \
+              --timeout=600s
+
+            POD="$(kubectl -n hermes get pod \
+              -l app.kubernetes.io/name=hermes-agent \
+              -o jsonpath='{.items[0].metadata.name}')"
+
+            echo "Using Hermes pod: $POD"
+
+            kubectl -n hermes exec "$POD" -- \
+              mkdir -p /tmp/bootstrap
+
+            kubectl -n hermes cp \
+              config/profiles.conf \
+              "$POD:/tmp/bootstrap/profiles.conf"
+
+            kubectl -n hermes cp \
+              scripts/install_profiles.sh \
+              "$POD:/tmp/bootstrap/install_profiles.sh"
+
+            kubectl -n hermes cp \
+              scripts/copy_git_dir.sh \
+              "$POD:/tmp/bootstrap/copy_git_dir.sh"
+
+            kubectl -n hermes exec "$POD" -- \
+              chown -R hermes:hermes /tmp/bootstrap
+
+            kubectl -n hermes exec "$POD" -- \
+              su hermes -s /bin/bash -c /tmp/bootstrap/install_profiles.sh
 
   - name: searxng
     namespace: hermes
