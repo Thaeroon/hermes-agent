@@ -1,0 +1,556 @@
+---
+# Source: hermes-agent/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: hermes-hermes-agent
+  labels:
+    helm.sh/chart: hermes-agent-1.13.0
+    app.kubernetes.io/name: hermes-agent
+    app.kubernetes.io/instance: hermes
+    app.kubernetes.io/version: "v2026.8.31"
+    app.kubernetes.io/managed-by: Helm
+
+---
+# Source: hermes-agent/templates/secret.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: hermes-hermes-agent-env
+  labels:
+    helm.sh/chart: hermes-agent-1.13.0
+    app.kubernetes.io/name: hermes-agent
+    app.kubernetes.io/instance: hermes
+    app.kubernetes.io/version: "v2026.8.31"
+    app.kubernetes.io/managed-by: Helm
+type: Opaque
+stringData:
+  OPENAI_API_KEY: "sk-REPLACE_ME"
+
+---
+# Source: hermes-agent/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hermes-hermes-agent-config
+  labels:
+    helm.sh/chart: hermes-agent-1.13.0
+    app.kubernetes.io/name: hermes-agent
+    app.kubernetes.io/instance: hermes
+    app.kubernetes.io/version: "v2026.8.31"
+    app.kubernetes.io/managed-by: Helm
+data:
+  # Partial config.yaml: only keys that override Hermes' built-in defaults.
+  config.yaml: |
+    agent:
+      gateway_timeout: 1800
+    model:
+      default: gpt-4o-mini
+      provider: openai-api
+    providers: {}
+    terminal:
+      backend: local
+
+---
+# Source: hermes-agent/templates/pvc.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: hermes-hermes-agent
+  labels:
+    helm.sh/chart: hermes-agent-1.13.0
+    app.kubernetes.io/name: hermes-agent
+    app.kubernetes.io/instance: hermes
+    app.kubernetes.io/version: "v2026.8.31"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: "5Gi"
+
+---
+# Source: hermes-agent/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hermes-hermes-agent
+  labels:
+    helm.sh/chart: hermes-agent-1.13.0
+    app.kubernetes.io/name: hermes-agent
+    app.kubernetes.io/instance: hermes
+    app.kubernetes.io/version: "v2026.8.31"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  replicas: 1
+  # Recreate avoids the new Pod getting stuck Pending while the old Pod still
+  # holds the ReadWriteOnce PVC during a rollout.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: hermes-agent
+      app.kubernetes.io/instance: hermes
+  template:
+    metadata:
+      annotations:
+        # Roll pods when config/secret content changes.
+        checksum/config: 5357549d5cb4753d21b7ee10eec8398442572df1371852200a679c5e6b6e8a5c
+        # secret.yaml never renders while externalSecret.enabled (see that
+        # template and hermes-agent.envSecretName) - hash the ExternalSecret
+        # manifest instead, so changing its target/data still rolls the Pod.
+        checksum/secret: 4fcc1cfcdaee901e307b08e9b02d6287414e8d371172a8f41dbebf1be08b77da
+      labels:
+        app.kubernetes.io/name: hermes-agent
+        app.kubernetes.io/instance: hermes
+    spec:
+      serviceAccountName: hermes-hermes-agent
+      automountServiceAccountToken: false
+      securityContext:
+        {}
+      initContainers:
+        # Seed chart-managed files into HERMES_HOME (the writable volume). Hermes
+        # merges config.yaml over its built-in defaults and also writes to its home
+        # at runtime, so the ConfigMap is not mounted there read-only.
+        - name: seed-config
+          image: "nousresearch/hermes-agent:v2026.8.31"
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            {}
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              seed() {
+                dest="$1"
+                source="$2"
+                if [ "false" = "true" ] || [ ! -f "$dest" ]; then
+                  echo "Seeding $dest (overwrite=false)"
+                  cp "$source" "$dest"
+                else
+                  echo "Keeping existing $dest (overwrite=false)"
+                fi
+              }
+              seed "/opt/data/config.yaml" /seed/config.yaml
+              if [ -f /seed/SOUL.md ]; then
+                seed "/opt/data/SOUL.md" /seed/SOUL.md
+              fi
+          volumeMounts:
+            - name: config
+              mountPath: /seed
+              readOnly: true
+            - name: data
+              mountPath: /opt/data
+      containers:
+        - name: hermes-agent
+          image: "nousresearch/hermes-agent:v2026.8.31"
+          imagePullPolicy: IfNotPresent
+          args:
+            - gateway
+            - run
+          securityContext:
+            {}
+          env:
+            - name: HERMES_HOME
+              value: "/opt/data"
+          envFrom:
+            - secretRef:
+                name: hermes-hermes-agent-env
+            - secretRef:
+                name: hermes-api
+            - secretRef:
+                name: searxng-secret
+            - secretRef:
+                name: crawl4ai-secret
+          resources:
+            limits:
+              cpu: "2"
+              memory: 2Gi
+            requests:
+              cpu: 100m
+              memory: 256Mi
+          volumeMounts:
+            - name: data
+              mountPath: /opt/data
+      volumes:
+        - name: config
+          configMap:
+            name: hermes-hermes-agent-config
+        - name: data
+          persistentVolumeClaim:
+            claimName: hermes-hermes-agent
+---
+# Source: hermes-agent/templates/tests/test-hermes-doctor.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: hermes-hermes-agent-test
+  labels:
+    helm.sh/chart: hermes-agent-1.13.0
+    app.kubernetes.io/name: hermes-agent
+    app.kubernetes.io/instance: hermes
+    app.kubernetes.io/version: "v2026.8.31"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: test
+  annotations:
+    # Helm test hook: created/run by `helm test <release>`, after install.
+    "helm.sh/hook": test
+    "helm.sh/hook-weight": "1"
+    "helm.sh/hook-delete-policy": before-hook-creation
+    # ArgoCD PostSync hook: also run automatically after every ArgoCD sync.
+    "argocd.argoproj.io/hook": PostSync
+    "argocd.argoproj.io/hook-delete-policy": BeforeHookCreation
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: hermes-agent
+        app.kubernetes.io/instance: hermes
+        app.kubernetes.io/component: test
+    spec:
+      restartPolicy: Never
+      initContainers:
+        # Seed the same chart-managed files into a private HERMES_HOME so
+        # `hermes doctor` evaluates what the workload runs with.
+        - name: seed-config
+          image: "nousresearch/hermes-agent:v2026.8.31"
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              cp /seed/config.yaml /opt/data/config.yaml
+              if [ -f /seed/SOUL.md ]; then
+                cp /seed/SOUL.md /opt/data/SOUL.md
+              fi
+          volumeMounts:
+            - name: config
+              mountPath: /seed
+              readOnly: true
+            - name: data
+              mountPath: /opt/data
+      containers:
+        - name: hermes-doctor
+          image: "nousresearch/hermes-agent:v2026.8.31"
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: HERMES_HOME
+              value: "/opt/data"
+          envFrom:
+            - secretRef:
+                name: hermes-hermes-agent-env
+            - secretRef:
+                name: hermes-api
+            - secretRef:
+                name: searxng-secret
+            - secretRef:
+                name: crawl4ai-secret
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              echo "===================================================="
+              echo " hermes-agent install test (doctor-style)"
+              echo "===================================================="
+
+              echo "[1/4] hermes CLI version"
+              hermes --version
+
+              echo "[2/4] seeded config.yaml present in HERMES_HOME"
+              if [ -f "$HERMES_HOME/config.yaml" ]; then
+                echo "  OK: $HERMES_HOME/config.yaml"
+              else
+                echo "  FAIL: $HERMES_HOME/config.yaml missing"; exit 1
+              fi
+
+              echo "[3/4] docker availability (local backend -> informational)"
+              if command -v docker >/dev/null 2>&1; then
+                docker version 2>/dev/null && echo "  docker daemon reachable" \
+                  || echo "  docker CLI present, no daemon (expected: local backend)"
+              else
+                echo "  docker not installed (expected: terminal.backend=local)"
+              fi
+
+              echo "[4/4] hermes doctor (timeout 120s)"
+              if [ "false" = "true" ]; then
+                timeout -k 10 120 hermes doctor
+              else
+                timeout -k 10 120 hermes doctor \
+                  || echo "  doctor reported issues (non-fatal: tests.doctorStrict=false)"
+              fi
+
+              echo "===================================================="
+              echo " ALL REQUIRED CHECKS PASSED"
+              echo "===================================================="
+          resources:
+            limits:
+              cpu: "1"
+              memory: 512Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          volumeMounts:
+            - name: data
+              mountPath: /opt/data
+      volumes:
+        - name: config
+          configMap:
+            name: hermes-hermes-agent-config
+        - name: data
+          emptyDir: {}
+
+
+---
+# Source: searxng/templates/005-serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: searxng
+  labels:
+    app.kubernetes.io/name: "searxng"
+    app.kubernetes.io/instance: "searxng"
+    app.kubernetes.io/version: "1.0.1"
+    app.kubernetes.io/managed-by: "Helm"
+automountServiceAccountToken: false
+
+---
+# Source: searxng/templates/006-configmap-settings.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: searxng-settings
+  labels:
+    app.kubernetes.io/name: "searxng"
+    app.kubernetes.io/instance: "searxng"
+    app.kubernetes.io/version: "1.0.1"
+    app.kubernetes.io/managed-by: "Helm"
+data:
+  settings.yml: |
+    use_default_settings: true
+    
+    server:
+      limiter: false
+      image_proxy: true
+      port: 8080
+      bind_address: "0.0.0.0"
+    
+    ui:
+      static_use_hash: true
+    
+    search:
+      safe_search: 0
+      autocomplete: ""
+      default_lang: ""
+      formats:
+        - html
+        - json
+
+---
+# Source: searxng/templates/007-configmap-limiter.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: searxng-limiter
+  labels:
+    app.kubernetes.io/name: "searxng"
+    app.kubernetes.io/instance: "searxng"
+    app.kubernetes.io/version: "1.0.1"
+    app.kubernetes.io/managed-by: "Helm"
+data:
+  limiter.toml: |
+    [botdetection.ip_limit]
+    # activate link_token method in the ip_limit method
+    link_token = true
+
+---
+# Source: searxng/templates/004-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: searxng-http
+  labels:
+    app.kubernetes.io/name: "searxng"
+    app.kubernetes.io/instance: "searxng"
+    app.kubernetes.io/version: "1.0.1"
+    app.kubernetes.io/managed-by: "Helm"
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8080
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: "searxng"
+    app.kubernetes.io/instance: "searxng"
+
+---
+# Source: searxng/templates/001-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: searxng
+  labels:
+    app.kubernetes.io/name: "searxng"
+    app.kubernetes.io/instance: "searxng"
+    app.kubernetes.io/version: "1.0.1"
+    app.kubernetes.io/managed-by: "Helm"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: "searxng"
+      app.kubernetes.io/instance: "searxng"
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: "searxng"
+        app.kubernetes.io/instance: "searxng"
+        app.kubernetes.io/version: "1.0.1"
+        app.kubernetes.io/managed-by: "Helm"
+    spec:
+      serviceAccountName: searxng
+      securityContext:
+        {}
+      containers:
+        - name: searxng
+          env:
+            - name: GRANIAN_WORKERS
+              value: "1"
+            - name: GRANIAN_BLOCKING_THREADS
+              value: "4"
+            - name: GRANIAN_BACKPRESSURE
+              value: "20"
+            - name: GRANIAN_HTTP1_BUFFER_SIZE
+              value: "8192"
+            - name: GRANIAN_HTTP1_KEEP_ALIVE
+              value: "false"
+            - name: GRANIAN_LOG_LEVEL
+              value: "warning"
+            - name: GRANIAN_LOG_ACCESS_ENABLED
+              value: "false"
+            - name: SEARXNG_SECRET
+              valueFrom:
+                secretKeyRef:
+                  key: SEARXNG_SECRET
+                  name: searxng-secret
+          securityContext:
+            {}
+          image: "searxng/searxng:2026.9.8-3fdc6d753"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+          resources:
+            {}
+          volumeMounts:
+            - mountPath: /etc/searxng/settings.yml
+              name: searxng-settings
+              subPath: settings.yml
+              readOnly: true
+            - mountPath: /etc/searxng/limiter.toml
+              name: searxng-limiter
+              subPath: limiter.toml
+              readOnly: true
+      volumes:
+        - name: searxng-settings
+          configMap:
+            name: searxng-settings
+        - name: searxng-limiter
+          configMap:
+            name: searxng-limiter
+
+---
+# Source: crawl4ai/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: crawl4ai
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: crawl4ai
+  ports:
+    - name: http
+      port: 11235
+      targetPort: http
+
+---
+# Source: crawl4ai/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crawl4ai
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: crawl4ai
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: crawl4ai
+    spec:
+      containers:
+        - name: crawl4ai
+          image: "unclecode/crawl4ai:0.9.0"
+          imagePullPolicy: IfNotPresent
+
+          envFrom:
+            - secretRef:
+                name: crawl4ai-secret
+
+          ports:
+            - name: http
+              containerPort: 11235
+
+          resources:
+            limits:
+              cpu: "2"
+              memory: 4Gi
+            requests:
+              cpu: 250m
+              memory: 1Gi
+
+          livenessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 40
+            periodSeconds: 30
+            timeoutSeconds: 10
+
+          readinessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 40
+            periodSeconds: 10
+            timeoutSeconds: 10
+
+          volumeMounts:
+            - name: dshm
+              mountPath: /dev/shm
+
+      volumes:
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Gi
+

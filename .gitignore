@@ -1,0 +1,5 @@
+hermes-data/.env
+hermes-data/memories/
+hermes-data/sessions/
+hermes-data/logs/
+searxng/.env

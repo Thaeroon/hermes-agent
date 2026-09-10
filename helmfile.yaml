@@ -1,0 +1,28 @@
+repositories:
+  - name: hermes-agent
+    url: https://jyje.github.io/hermes-agent-helm
+
+  - name: kubitodev
+    url: https://charts.kubito.dev
+
+releases:
+  - name: hermes
+    namespace: hermes
+    createNamespace: true
+    chart: hermes-agent/hermes-agent
+    version: 1.13.0
+    values:
+      - values/hermes.yaml
+
+  - name: searxng
+    namespace: hermes
+    chart: kubitodev/searxng
+    version: 1.1.4
+    values:
+      - values/searxng.yaml
+
+  - name: crawl4ai
+    namespace: hermes
+    chart: ./charts/crawl4ai
+    values:
+      - values/crawl4ai.yaml

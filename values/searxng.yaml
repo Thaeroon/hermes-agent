@@ -1,0 +1,63 @@
+replicaCount: 1
+
+service:
+  type: ClusterIP
+  port: 8080
+
+image:
+  repository: searxng/searxng
+  tag: "2026.9.8-3fdc6d753"
+  pullPolicy: IfNotPresent
+
+serviceAccount:
+  enabled: true
+  automount: false
+
+env:
+  - name: SEARXNG_SECRET
+    valueFrom:
+      secretKeyRef:
+        name: searxng-secret
+        key: SEARXNG_SECRET
+
+config:
+  settings:
+    enabled: true
+    data: |-
+      use_default_settings: true
+
+      server:
+        limiter: false
+        image_proxy: true
+        port: 8080
+        bind_address: "0.0.0.0"
+
+      ui:
+        static_use_hash: true
+
+      search:
+        safe_search: 0
+        autocomplete: ""
+        default_lang: ""
+        formats:
+          - html
+          - json
+
+  limiter:
+    enabled: true
+
+  granian:
+    enabled: true
+    workers: 1
+    blocking_threads: 4
+    backpressure: 20
+    http1_buffer_size: 8192
+    http1_keep_alive: false
+    log_level: warning
+    log_access_enabled: false
+
+  uwsgi:
+    enabled: false
+
+ingress:
+  enabled: false

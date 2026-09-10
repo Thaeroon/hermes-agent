@@ -1,0 +1,47 @@
+replicaCount: 1
+
+persistence:
+  enabled: true
+  size: 5Gi
+  accessModes:
+    - ReadWriteOnce
+  mountPath: /opt/data
+
+bootstrap:
+  enabled: true
+  overwrite: false
+
+config:
+  model:
+    default: gpt-4o-mini
+    provider: openai-api
+
+  terminal:
+    backend: local
+
+  agent:
+    gateway_timeout: 1800
+
+env: {}
+
+extraEnvFrom:
+  - secretRef:
+      name: hermes-api
+
+  - secretRef:
+      name: searxng-secret
+
+  - secretRef:
+      name: crawl4ai-secret
+
+service:
+  enabled: false
+
+ingress:
+  enabled: false
+
+httpRoute:
+  enabled: false
+
+networkPolicy:
+  enabled: false
