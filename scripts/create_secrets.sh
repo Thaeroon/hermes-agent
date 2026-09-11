@@ -9,25 +9,6 @@ secret_exists() {
   kubectl -n "$NAMESPACE" get secret "$name" >/dev/null 2>&1
 }
 
-ensure_secret_from_env() {
-  local name="$1"
-  local key="$2"
-
-  if secret_exists "$name"; then
-    echo "✓ Secret '$name' already exists"
-    return 0
-  fi
-
-  local value="${!key:?$key must be set}"
-
-  echo "Creating secret '$name'..."
-
-  kubectl -n "$NAMESPACE" create secret generic "$name" \
-    --from-literal="$key=$value"
-
-  echo "✓ Secret '$name' created"
-}
-
 ensure_generated_secret() {
   local name="$1"
   local key="$2"
@@ -78,15 +59,10 @@ ensure_hermes_env_secret() {
 }
 
 
-
 kubectl create namespace "$NAMESPACE" \
   --dry-run=client \
   -o yaml |
   kubectl apply -f -
-
-# ensure_secret_from_env \
-#   hermes-git \
-#   GIT_TOKEN
 
 ensure_generated_secret \
   searxng-secret \

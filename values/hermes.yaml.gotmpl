@@ -25,6 +25,9 @@ config:
 env:
   CRAWL4AI_URL: "http://crawl4ai:11235"
   SEARXNG_URL: "http://searxng-http:8080"
+  {{- if .Values.signal.enabled }}
+  SIGNAL_HTTP_URL: "http://signal-cli-signal-cli:8080"
+  {{- end }}
 
 extraEnvFrom:
   # - secretRef:

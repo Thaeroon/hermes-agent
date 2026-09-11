@@ -1,3 +1,7 @@
+values:
+  - signal:
+      enabled: false
+
 hooks:
   - events: ["prepare"]
     showlogs: true
@@ -22,7 +26,7 @@ releases:
     chart: hermes-agent/hermes-agent
     version: 1.13.0
     values:
-      - values/hermes.yaml
+      - values/hermes.yaml.gotmpl
     hooks:
       - events: ["postsync"]
         showlogs: true
@@ -79,3 +83,10 @@ releases:
     chart: ./charts/crawl4ai
     values:
       - values/crawl4ai.yaml
+
+  - name: signal-cli
+    namespace: hermes
+    condition: signal.enabled
+    chart: ./charts/signal-cli
+    values:
+      - values/signal-cli.yaml
