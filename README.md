@@ -29,6 +29,16 @@ read -rs HERMES_OPENROUTER_API_KEY
 helmfile sync
 ```
 
+### connect to hermes
+#### Chat
+```
+./scripts/hermes.sh
+```
+#### Troubleshooting or management
+```
+./scripts/hermes_bash.sh
+```
+
 ## Features
 ### Web tools
 Comes bundled and configured with searxng and crawl4ai
