@@ -31,6 +31,9 @@ extraEnvFrom:
       name: hermes-git
 
   - secretRef:
+      name: hermes-env
+
+  - secretRef:
       name: searxng-secret
 
   - secretRef:
