@@ -8,11 +8,11 @@ PROFILE_DIR="${HERMES_HOME}/profiles"
 source "$SCRIPT_DIR/profiles.conf"
 
 # Configure Git for the hermes user
-git config --global credential.helper \
-  '!f() {
-    echo username=x-access-token
-    echo password=$GIT_TOKEN
-  }; f'
+# git config --global credential.helper \
+#   '!f() {
+#     echo username=x-access-token
+#     echo password=$GIT_TOKEN
+#   }; f'
 
 for name in "${!PROFILE_URL[@]}"; do
     url="${PROFILE_URL[$name]}"

@@ -15,10 +15,6 @@ k3d cluster create hermes
 ```
 
 ### Prepare the secrets
-#### Required: Set git token for access to the profiles
-```
-read -rs GIT_TOKEN
-```
 #### Optional set any keys you want setup in the hermes environement.
 ```
 read -rs HERMES_<FINAL_KEY_NAME>

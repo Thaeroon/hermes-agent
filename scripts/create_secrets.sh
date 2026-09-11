@@ -84,9 +84,9 @@ kubectl create namespace "$NAMESPACE" \
   -o yaml |
   kubectl apply -f -
 
-ensure_secret_from_env \
-  hermes-git \
-  GIT_TOKEN
+# ensure_secret_from_env \
+#   hermes-git \
+#   GIT_TOKEN
 
 ensure_generated_secret \
   searxng-secret \

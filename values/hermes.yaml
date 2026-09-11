@@ -27,8 +27,8 @@ env:
   SEARXNG_URL: "http://searxng-http:8080"
 
 extraEnvFrom:
-  - secretRef:
-      name: hermes-git
+  # - secretRef:
+  #     name: hermes-git
 
   - secretRef:
       name: hermes-env
