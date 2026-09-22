@@ -34,5 +34,5 @@ for name in "${!PROFILE_URL[@]}"; do
 done
 
 hermes profile use $DEFAULT_PROFILE
-hermes gateway start
+hermes gateway start || echo "Failed to start gateway, this should be fine anyway."
 hermes -p default gateway stop

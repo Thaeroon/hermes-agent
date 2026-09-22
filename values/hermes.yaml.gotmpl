@@ -28,6 +28,8 @@ env:
   {{- if .Values.signal.enabled }}
   SIGNAL_HTTP_URL: "http://signal-cli-signal-cli:8080"
   {{- end }}
+  HERMES_STREAM_READ_TIMEOUT: "3600"
+  HERMES_STREAM_STALE_TIMEOUT: "3600"
 
 extraEnvFrom:
   # - secretRef:

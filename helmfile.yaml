@@ -24,7 +24,7 @@ releases:
     namespace: hermes
     createNamespace: true
     chart: hermes-agent/hermes-agent
-    version: 1.13.0
+    version: 1.15.0
     values:
       - values/hermes.yaml.gotmpl
     hooks:
