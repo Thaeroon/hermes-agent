@@ -1,6 +1,10 @@
 values:
   - signal:
       enabled: false
+  - hermes:
+      enabled: true
+  - zeroclaw:
+      enabled: true
 
 hooks:
   - events: ["prepare"]
@@ -19,10 +23,14 @@ repositories:
   - name: kubitodev
     url: https://charts.kubito.dev
 
+  - name: bjw-s
+    url: https://bjw-s-labs.github.io/helm-charts
+
 releases:
   - name: hermes
     namespace: hermes
     createNamespace: true
+    condition: hermes.enabled
     chart: hermes-agent/hermes-agent
     version: 1.15.0
     values:
@@ -90,3 +98,21 @@ releases:
     chart: ./charts/signal-cli
     values:
       - values/signal-cli.yaml
+
+  - name: zeroclaw
+    namespace: hermes
+    createNamespace: true
+    condition: zeroclaw.enabled
+    chart: bjw-s/app-template
+    version: ~3.7.0
+    values:
+      - values/zero-claw.yaml
+
+  - name: fastcrw
+    namespace: hermes
+    createNamespace: true
+    condition: zeroclaw.enabled
+    chart: bjw-s/app-template
+    version: ~3.7.0
+    values:
+      - values/fastcrw.yaml

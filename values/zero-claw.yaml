@@ -1,0 +1,34 @@
+defaultPodOptions:
+  securityContext:
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+    fsGroupChangePolicy: "OnRootMismatch"
+
+controllers:
+  zeroclaw:
+    strategy: Recreate
+    containers:
+      app:
+        image:
+          repository: ghcr.io/zeroclaw-labs/zeroclaw
+          tag: debian
+          pullPolicy: IfNotPresent
+
+# Service exposed on port 3000 for the setup / config UI
+service:
+  app:
+    controller: zeroclaw
+    ports:
+      http:
+        port: 42617
+
+# 100% dynamic, durable storage — nothing else
+persistence:
+  data:
+    enabled: true
+    type: persistentVolumeClaim
+    accessMode: ReadWriteOnce
+    size: 10Gi
+    globalMounts:
+      - path: /zeroclaw-data

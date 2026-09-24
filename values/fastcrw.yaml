@@ -1,0 +1,85 @@
+controllers:
+  crw:
+    replicas: 1
+    strategy: RollingUpdate
+    containers:
+      # Main fastCRW scraper service
+      app:
+        image:
+          repository: ghcr.io/us/crw
+          tag: 0.30.0
+          pullPolicy: IfNotPresent
+        env:
+          PORT: "3000"
+          CRW_RENDERER__LIGHTPANDA__WS_URL: "ws://127.0.0.1:9222"
+        probes:
+          liveness:
+            enabled: true
+            custom: true
+            spec:
+              httpGet:
+                path: /health
+                port: 3000
+              initialDelaySeconds: 2
+              periodSeconds: 10
+          readiness:
+            enabled: true
+            custom: true
+            spec:
+              httpGet:
+                path: /health
+                port: 3000
+              initialDelaySeconds: 2
+              periodSeconds: 5
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi
+
+      # Headless DOM emulator for JavaScript SPAs
+      lightpanda:
+        image:
+          repository: lightpanda/browser
+          tag: 0.4.1
+          pullPolicy: IfNotPresent
+        env:
+          - name: LIGHTPANDA_DISABLE_TELEMETRY
+            value: "true"
+        probes:
+          liveness:
+            enabled: true
+            custom: true
+            spec:
+              httpGet:
+                path: /json/version
+                port: 9222
+              initialDelaySeconds: 3
+              periodSeconds: 15
+              timeoutSeconds: 3
+          readiness:
+            enabled: true
+            custom: true
+            spec:
+              httpGet:
+                path: /json/version
+                port: 9222
+              initialDelaySeconds: 2
+              periodSeconds: 5
+              timeoutSeconds: 2
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            cpu: 1000m
+            memory: 512Mi
+
+service:
+  app:
+    controller: crw
+    ports:
+      http:
+        port: 3000
